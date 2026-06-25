@@ -14,14 +14,23 @@ CAMParameters uses itemByName (not itemById). op.parameters holds everything.
 import importlib
 import json
 import os
+import sys
 import traceback
 
 import adsk.core
 import adsk.cam
 
+# Fusion loads an add-in as a package and does NOT add its folder to sys.path for
+# absolute sibling imports, so the add-in silently fails to load (the two working
+# add-ins dodge this with relative imports `from .x import`). We keep ABSOLUTE
+# imports -- so cutting_force.py / report.py / tests stay runnable standalone --
+# and put our own folder on sys.path here, before importing them.
+_ADDIN_DIR = os.path.dirname(os.path.abspath(__file__))
+if _ADDIN_DIR not in sys.path:
+    sys.path.insert(0, _ADDIN_DIR)
+
 # Qualified imports (cf.X, not `from cf import X`) so importlib.reload in run()
-# actually refreshes these during development -- a `from x import y` binding
-# would keep pointing at the stale function after a reload.
+# actually refreshes these during development.
 import cutting_force as cf
 import materials
 import report
@@ -50,7 +59,6 @@ PALETTE_ID = "cuttingForcePalette"
 PANEL_ID = "cuttingForcePanel"
 TAB_ID = "MillingTab"          # native Manufacture > Milling tab (always visible);
 WORKSPACE_ID = "CAMEnvironment"  # a self-made tab is created hidden (isVisible=False)
-_ADDIN_DIR = os.path.dirname(os.path.abspath(__file__))
 
 _handlers = []
 
@@ -131,13 +139,45 @@ def _theme(app):
     return "light"
 
 
-def build_full_payload(app, mat_key):
-    """Nested payload: materials list + every setup -> operations, for the palette."""
+def _setup_component_names(s):
+    """Names of the design components a setup machines (via its model bodies)."""
+    names = set()
+    try:
+        for m in s.models:
+            try:
+                names.add(m.parentComponent.name)
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return names
+
+
+def build_full_payload(app, mat_key, overrides=None, active_only=False):
+    """Nested payload: materials list + every setup -> operations, for the palette.
+
+    overrides: {op_token: {"ae": mm, "ap": mm}} -- user-edited engagement values
+    that replace the read/estimated ones for that operation.
+    active_only: when True, show only setups whose model bodies belong to the
+    active component (the root component counts as "everything" -> no filter).
+    """
+    overrides = overrides or {}
+    active_name = root_name = None
+    if active_only:
+        design = app.activeDocument.products.itemByProductType("DesignProductType")
+        try:
+            active_name = design.activeComponent.name
+            root_name = design.rootComponent.name
+        except Exception:
+            active_name = root_name = None
+    filtering = bool(active_only and active_name and active_name != root_name)
     keys = list(materials.MATERIALS.keys())
     payload = {
         "materials": [[k, materials.MATERIALS[k]["name"]] for k in keys],
         "material_key": mat_key if mat_key in materials.MATERIALS else materials.DEFAULT_KEY,
         "theme": _theme(app),
+        "active_only": active_only,
+        "active_component": active_name if filtering else None,
         "setups": [],
     }
     cam = app.activeDocument.products.itemByProductType("CAMProductType")
@@ -147,6 +187,8 @@ def build_full_payload(app, mat_key):
     mat = materials.get(payload["material_key"])
 
     for s in cam.setups:
+        if filtering and active_name not in _setup_component_names(s):
+            continue
         try:
             ops = s.allOperations
         except Exception:
@@ -156,8 +198,17 @@ def build_full_payload(app, mat_key):
             if not _is_milling(op):
                 continue
             try:
+                # CAM Operation.entityToken comes back empty, so key the override
+                # by setup+op name (unique and stable across recomputes).
+                token = s.name + "::" + op.name
                 inp, ae_est, ap_est = _inputs_for(op, mat)
-                rows.append((op.name, inp, cf.estimate(inp), ae_est, ap_est))
+                ov = overrides.get(token)
+                if ov:
+                    if ov.get("ae") is not None:
+                        inp.radial_depth_mm = float(ov["ae"]); ae_est = False
+                    if ov.get("ap") is not None:
+                        inp.axial_depth_mm = float(ov["ap"]); ap_est = False
+                rows.append((op.name, inp, cf.estimate(inp), ae_est, ap_est, token))
             except Exception:
                 continue
         if rows:
@@ -189,10 +240,13 @@ class HTMLHandler(adsk.core.HTMLEventHandler):
             if not pal or a.action not in ("ready", "recompute"):
                 return
             if a.data:
-                mat_key = json.loads(a.data).get("material") or materials.DEFAULT_KEY
+                cfg = json.loads(a.data)
+                mat_key = cfg.get("material") or materials.DEFAULT_KEY
+                overrides = cfg.get("overrides") or {}
+                active_only = bool(cfg.get("activeOnly", False))
             else:
-                mat_key = materials.DEFAULT_KEY
-            payload = build_full_payload(app, mat_key)
+                mat_key, overrides, active_only = materials.DEFAULT_KEY, {}, False
+            payload = build_full_payload(app, mat_key, overrides, active_only)
             pal.sendInfoToHTML("render", json.dumps(payload))
         except Exception:
             ui.messageBox("Cutting Force error:\n" + traceback.format_exc())

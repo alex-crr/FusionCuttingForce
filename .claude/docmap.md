@@ -3,10 +3,13 @@
 Fusion 360 add-in: estimate milling cutting forces per CAM operation, emit HTML report.
 
 ## Data flow
-button (icon: resources/) → ExecuteHandler → `_show_palette` (loads palette/report.html, docked).
-Page fires `ready`/`recompute` (material only) → `HTMLHandler` → `build_full_payload(app, mat_key)`
-(EVERY setup's ops via `_inputs_for` → `cf.estimate` → `report.setup_payload`, worst op flagged,
-theme detected) → `sendInfoToHTML('render', json)` → JS draws collapsible `<details>` per setup.
+button → ExecuteHandler → `_show_palette` (loads palette/report.html, docked). Page POLLS for
+`window.adsk` (injected after load) then fires `ready`/`recompute` ({material, activeOnly,
+overrides}) → `HTMLHandler` → `build_full_payload(app, mat_key, overrides, active_only)`
+(setups via `_inputs_for` → apply per-op ae/ap overrides → `cf.estimate` → `report.setup_payload`,
+worst op flagged, theme detected; `active_only` filters setups by active component) →
+`sendInfoToHTML('render', json)` → JS draws collapsible `<details>` per setup with editable ae/ap.
+NOTE: icon (resources/) currently NOT wired — a resourceFolder hung load; plain button for now.
 
 ## Modules
 - **cutting_force.py** — pure model, no Fusion deps.
@@ -16,7 +19,7 @@ theme detected) → `sendInfoToHTML('render', json)` → JS draws collapsible `<
 - **materials.json** — DATA. Edit to add materials: key→{name,kc11,mc,rake_min,rake_max}. `_`-prefixed keys ignored.
 - **materials.py** — loader. `_load()` validates/skips bad entries; exposes `MATERIALS`, `DEFAULT_KEY`, `get(key)`. `__main__` self-check.
 - **report.py** — pure payload builder. `op_payload`, `setup_payload(name, rows)->dict` (rows=[(name,CutInputs,CutResult,ae_est,ap_est)]; marks worst=max resultant). Values as rake-band `[lo,hi]`. `__main__` self-check.
-- **palette/report.html** — the UI: shell + inline CSS (CSS-vars + `body.dark` for Fusion theme) + JS. Bridge: `window.fusionJavaScriptHandler.handle('render',json)` receives; `adsk.fusionSendData('ready'|'recompute', {material})` sends. Material dropdown + Refresh. Each setup is a collapsible `<details open>` (summary shows op count + ★ heaviest); ≈ marks estimated ae/ap; legend.
+- **palette/report.html** — the UI: shell + inline CSS (CSS-vars + `body.dark`) + JS. Bridge: `window.fusionJavaScriptHandler.handle('render',json)` receives; `adsk.fusionSendData('ready'|'recompute', {material,activeOnly,overrides})` sends — MUST poll for `window.adsk` first (injected after load) or the request drops and the palette stays empty. Controls: material dropdown, "Active component only", Refresh. Setups = collapsible `<details open>` (summary: op count + ★ heaviest). ae/ap are editable `<input>`s → `overrides[token][field]` keyed `setupName::opName` → recompute; ≈ marks estimated; legend.
 - **generate_icon.py** — `python generate_icon.py` → resources/{16,32,64}x16.png (force-arrow-into-workpiece). **resources/** = button icon folder passed to `addButtonDefinition`.
 - **FusionCuttingForce.py** — ONLY Fusion-coupled file. Qualified imports (`cf`) + `importlib.reload` in `run()` so pure-module edits load on Stop→Run (editing THIS file needs Fusion restart).
   - `PARAM_IDS` + `ENGAGE` (per-strategy ae/ap ids) + `ENGAGE_DEFAULT`. `CM_TO_MM`: API returns lengths in cm. `_read` uses **itemByName** (CAMParameters has no itemById); `op.parameters` holds everything.

@@ -13,9 +13,9 @@ def _rng(nominal: float, r: CutResult) -> list[float]:
 
 
 def op_payload(name: str, i: CutInputs, r: CutResult,
-               ae_est: bool, ap_est: bool) -> dict:
+               ae_est: bool, ap_est: bool, token: str = "") -> dict:
     return {
-        "name": name,
+        "name": name, "token": token,
         "D": i.diameter_mm, "z": i.flutes, "fz": i.feed_per_tooth_mm,
         "ae": i.radial_depth_mm, "ap": i.axial_depth_mm,
         "rpm": i.spindle_rpm or 0, "stickout": i.stickout_mm or 0,

@@ -44,6 +44,10 @@
   tr.worst td.name::before{content:'\2605 ';color:var(--est);}
   .est{color:var(--est);font-weight:600;}
   .est::before{content:'\2248\00a0';}
+  td.editcell{white-space:nowrap;}
+  input.edit{width:52px;font-size:12px;padding:1px 3px;text-align:right;
+       background:var(--bg);color:var(--fg);border:1px solid var(--btn-border);border-radius:2px;}
+  .est-mark{color:var(--est);font-weight:600;margin-right:2px;}
   .hl{font-weight:600;}
   .muted{color:var(--muted);}
   .legend{margin-top:14px;color:var(--legend);max-width:880px;line-height:1.7;}
@@ -58,6 +62,7 @@
 <header>
   <h1>Cutting Force</h1>
   <span><label for="mat">Material</label> <select id="mat"></select></span>
+  <span><label><input type="checkbox" id="activeOnly"> Active component only</label></span>
   <button id="refresh">Refresh</button>
   <span id="status" class="muted"></span>
 </header>
@@ -80,17 +85,25 @@
 
 <script>
 var firstRender = true;
+var overrides = {};   // {op_token: {ae: mm, ap: mm}} -- user-edited engagement
 
 function f(x, d){ d = d || 0; return Number(x).toFixed(d); }
 function rng(a, d){ return f(a[0], d) + '–' + f(a[1], d); }
 function cell(html, cls){ return '<td' + (cls ? ' class="' + cls + '"' : '') + '>' + html + '</td>'; }
 
+function editCell(op, field){
+  var est = field === 'ae' ? op.ae_est : op.ap_est;
+  var val = field === 'ae' ? op.ae : op.ap;
+  return '<td class="editcell">' + (est ? '<span class="est-mark">≈</span>' : '')
+    + '<input class="edit" type="number" step="0.01" min="0" value="' + f(val, 2)
+    + '" data-token="' + op.token + '" data-field="' + field + '"></td>';
+}
+
 function opRow(op, isWorst){
-  var ae = (op.ae_est ? '<span class="est">' : '<span>') + f(op.ae, 2) + '</span>';
-  var ap = (op.ap_est ? '<span class="est">' : '<span>') + f(op.ap, 2) + '</span>';
   return '<tr class="' + (isWorst ? 'worst' : '') + '">'
     + cell(op.name, 'name') + cell(f(op.D,1) + ' / ' + op.z)
-    + cell(ae) + cell(ap) + cell(f(op.fz,3)) + cell(f(op.hm,3)) + cell(f(op.kc,0))
+    + editCell(op, 'ae') + editCell(op, 'ap')
+    + cell(f(op.fz,3)) + cell(f(op.hm,3)) + cell(f(op.kc,0))
     + cell(rng(op.ft,0), 'hl') + cell(f(op.fr,0)) + cell(f(op.fa,0))
     + cell(rng(op.fres,0), 'hl') + cell(rng(op.peak,0))
     + cell(op.pc[1] ? rng(op.pc,0) : '&ndash;') + cell(rng(op.torque,2))
@@ -119,10 +132,12 @@ function render(p){
       if(m[0] === p.material_key) o.selected = true;
       mat.add(o);
     });
+    document.getElementById('activeOnly').checked = !!p.active_only;
     firstRender = false;
   }
+  var nOps = p.setups.reduce(function(a,s){return a + s.ops.length;}, 0);
   document.getElementById('status').textContent =
-    p.setups.reduce(function(n,s){return n + s.ops.length;}, 0) + ' operation(s)';
+    nOps + ' operation(s)' + (p.active_component ? ' · component: ' + p.active_component : '');
 
   if(p.error){ document.getElementById('table').innerHTML =
       '<div class="empty">' + p.error + '</div>'; document.getElementById('legend').innerHTML=''; return; }
@@ -146,19 +161,39 @@ function render(p){
     + '<b>≈</b> value estimated, not specified in the operation — '
     + 'commonly a finish/cleanup pass where engagement comes from stock-to-leave '
     + '(<b>≈</b> on <b>ae</b> = radial estimated, on <b>ap</b> = axial estimated). '
+    + '<b>ae</b> and <b>ap</b> are editable — type a value to override and recompute. '
     + 'Ranges span the material’s rake-angle band.';
 }
 
 function send(action, data){ if(window.adsk){ adsk.fusionSendData(action, data || ''); } }
 function recompute(){
-  send('recompute', JSON.stringify({ material: document.getElementById('mat').value }));
+  send('recompute', JSON.stringify({
+    material: document.getElementById('mat').value,
+    activeOnly: document.getElementById('activeOnly').checked,
+    overrides: overrides
+  }));
 }
+
+// Edited ae/ap -> store the override and recompute (delegated; survives the
+// table's innerHTML rebuilds since the listener is on the container).
+document.getElementById('table').addEventListener('change', function(e){
+  var el = e.target;
+  if(el && el.classList && el.classList.contains('edit')){
+    var v = parseFloat(el.value);
+    if(!isNaN(v) && v > 0 && el.dataset.token){
+      overrides[el.dataset.token] = overrides[el.dataset.token] || {};
+      overrides[el.dataset.token][el.dataset.field] = v;
+      recompute();
+    }
+  }
+});
 window.fusionJavaScriptHandler = { handle: function(action, data){
   try { if(action === 'render'){ render(JSON.parse(data)); } }
   catch(e){ return 'FAILED:' + e; }
   return 'OK';
 }};
 document.getElementById('mat').addEventListener('change', recompute);
+document.getElementById('activeOnly').addEventListener('change', recompute);
 document.getElementById('refresh').addEventListener('click', recompute);
 
 // window.adsk is injected slightly AFTER load, so polling for it before firing
