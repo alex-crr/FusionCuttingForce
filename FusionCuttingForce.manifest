@@ -1,0 +1,13 @@
+{
+    "autodeskProduct": "Fusion360",
+    "type": "addin",
+    "id": "8f3a1c64-2d77-4e9b-b6a1-9c0f2e7a4d10",
+    "author": "Alexandre Courrieu",
+    "description": {
+        "": "Estimate milling cutting forces (Kienzle model) per operation and generate a report."
+    },
+    "version": "0.1.1",
+    "runOnStartup": true,
+    "supportedOS": "windows|mac",
+    "editEnabled": true
+}

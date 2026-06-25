@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Cutting Force</title>
+<style>
+  :root{
+    --bg:#fff; --fg:#222; --header:#f7f7f7; --border:#e2e2e2; --th:#f0f0f0;
+    --setup:#e8eef6; --setup-fg:#234; --setup-border:#b9c6da; --worst:#fff3d6;
+    --est:#b35900; --muted:#999; --legend:#555; --btn:#fff; --btn-border:#bbb;
+  }
+  body.dark{
+    --bg:#2b2b2b; --fg:#dcdcdc; --header:#333; --border:#474747; --th:#3a3a3a;
+    --setup:#37414f; --setup-fg:#cfe0f5; --setup-border:#4a5b72; --worst:#4a4226;
+    --est:#ffb066; --muted:#888; --legend:#aaa; --btn:#3a3a3a; --btn-border:#555;
+  }
+  body{font-family:'Segoe UI',Arial,sans-serif;margin:0;font-size:12px;
+       background:var(--bg);color:var(--fg);}
+  header{position:sticky;top:0;background:var(--header);border-bottom:1px solid var(--border);
+         padding:10px 14px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;z-index:5;}
+  header label{font-weight:600;}
+  select,input[type=number]{font-size:12px;padding:3px 5px;background:var(--bg);
+       color:var(--fg);border:1px solid var(--btn-border);}
+  input[type=number]{width:64px;}
+  button{font-size:12px;padding:4px 12px;cursor:pointer;background:var(--btn);
+       color:var(--fg);border:1px solid var(--btn-border);border-radius:3px;}
+  h1{font-size:15px;margin:0 12px 0 0;}
+  .wrap{padding:0 14px 24px;}
+  table{border-collapse:collapse;width:100%;margin-top:12px;}
+  th,td{border:1px solid var(--border);padding:5px 7px;text-align:right;white-space:nowrap;}
+  th{background:var(--th);position:sticky;top:54px;}
+  td.name,th.name{text-align:left;}
+  details.setup{margin:12px 0 0;border:1px solid var(--setup-border);border-radius:4px;
+       overflow:hidden;max-width:none;}
+  details.setup>summary{background:var(--setup);color:var(--setup-fg);padding:7px 12px;
+       font-weight:700;list-style:none;}
+  details.setup>summary::-webkit-details-marker{display:none;}
+  details.setup>summary::before{content:'\25B8\00a0';}
+  details.setup[open]>summary::before{content:'\25BE\00a0';}
+  .sum-meta{font-weight:400;color:var(--legend);margin-left:8px;}
+  details.setup table{margin:0;}
+  details.setup th{top:0;}
+  tr.worst td{background:var(--worst);}
+  tr.worst td.name::before{content:'\2605 ';color:var(--est);}
+  .est{color:var(--est);font-weight:600;}
+  .est::before{content:'\2248\00a0';}
+  .hl{font-weight:600;}
+  .muted{color:var(--muted);}
+  .legend{margin-top:14px;color:var(--legend);max-width:880px;line-height:1.7;}
+  .legend b{color:var(--est);}
+  details{margin-top:16px;color:var(--legend);max-width:880px;}
+  summary{cursor:pointer;font-weight:600;}
+  ol{line-height:1.7;}
+  .empty{padding:40px;color:var(--muted);text-align:center;}
+</style>
+</head>
+<body>
+<header>
+  <h1>Cutting Force</h1>
+  <span><label for="mat">Material</label> <select id="mat"></select></span>
+  <button id="refresh">Refresh</button>
+  <span id="status" class="muted"></span>
+</header>
+<div class="wrap">
+  <div id="table"></div>
+  <div class="legend" id="legend"></div>
+  <details>
+    <summary>How it is calculated</summary>
+    <ol>
+      <li>Radial immersion ar = ae/D &middot; engagement &phi; = acos(1&minus;2ar)</li>
+      <li>Mean chip hm = 2&middot;ar&middot;fz/&phi;&middot;sin&kappa;r</li>
+      <li>Specific force (Kienzle) kc = kc<sub>1.1</sub>&middot;hm<sup>&minus;mc</sup></li>
+      <li>Tangential Ft = kc&middot;ae&middot;ap&middot;fz&middot;z/(&pi;D); Fr=0.4Ft; Fa=0.3Ft; Fres=&radic;(Ft&sup2;+Fr&sup2;+Fa&sup2;)</li>
+      <li>Power Pc=Ft&middot;vc/60; Torque=Ft&middot;(D/2)/1000</li>
+      <li>Deflection &delta;=F<sub>bend</sub>L&sup3;/(3EI), I=&pi;(0.8D)&#8308;/64, carbide E=600 GPa</li>
+      <li>Ranges span the material rake band [1&minus;(&gamma;&minus;&gamma;<sub>ref</sub>)&middot;0.01]</li>
+    </ol>
+  </details>
+</div>
+
+<script>
+var firstRender = true;
+
+function f(x, d){ d = d || 0; return Number(x).toFixed(d); }
+function rng(a, d){ return f(a[0], d) + '–' + f(a[1], d); }
+function cell(html, cls){ return '<td' + (cls ? ' class="' + cls + '"' : '') + '>' + html + '</td>'; }
+
+function opRow(op, isWorst){
+  var ae = (op.ae_est ? '<span class="est">' : '<span>') + f(op.ae, 2) + '</span>';
+  var ap = (op.ap_est ? '<span class="est">' : '<span>') + f(op.ap, 2) + '</span>';
+  return '<tr class="' + (isWorst ? 'worst' : '') + '">'
+    + cell(op.name, 'name') + cell(f(op.D,1) + ' / ' + op.z)
+    + cell(ae) + cell(ap) + cell(f(op.fz,3)) + cell(f(op.hm,3)) + cell(f(op.kc,0))
+    + cell(rng(op.ft,0), 'hl') + cell(f(op.fr,0)) + cell(f(op.fa,0))
+    + cell(rng(op.fres,0), 'hl') + cell(rng(op.peak,0))
+    + cell(op.pc[1] ? rng(op.pc,0) : '&ndash;') + cell(rng(op.torque,2))
+    + cell(op.defl[1] ? rng(op.defl,1) : '&ndash;') + cell(op.mrr ? f(op.mrr,1) : '&ndash;')
+    + '</tr>';
+}
+
+function tableFor(s){
+  var h = '<table><thead><tr>'
+    + '<th class="name">Operation</th><th>D / z</th><th>ae</th><th>ap</th><th>fz</th>'
+    + '<th>hm</th><th>kc</th><th>Ft [N]</th><th>Fr [N]</th><th>Fa [N]</th>'
+    + '<th>Fres [N]</th><th>Peak [N]</th><th>Pc [W]</th><th>Torque</th>'
+    + '<th>Defl [µm]</th><th>MRR</th></tr></thead><tbody>';
+  s.ops.forEach(function(op, idx){ h += opRow(op, idx === s.worst); });
+  return h + '</tbody></table>';
+}
+
+function render(p){
+  document.body.className = (p.theme === 'dark') ? 'dark' : '';
+  var mat = document.getElementById('mat');
+  if(firstRender){
+    mat.innerHTML = '';
+    p.materials.forEach(function(m){
+      var o = document.createElement('option');
+      o.value = m[0]; o.text = m[1];
+      if(m[0] === p.material_key) o.selected = true;
+      mat.add(o);
+    });
+    firstRender = false;
+  }
+  document.getElementById('status').textContent =
+    p.setups.reduce(function(n,s){return n + s.ops.length;}, 0) + ' operation(s)';
+
+  if(p.error){ document.getElementById('table').innerHTML =
+      '<div class="empty">' + p.error + '</div>'; document.getElementById('legend').innerHTML=''; return; }
+  if(!p.setups.length){ document.getElementById('table').innerHTML =
+      '<div class="empty">No milling operations found.</div>'; document.getElementById('legend').innerHTML=''; return; }
+
+  var html = '';
+  p.setups.forEach(function(s){
+    var meta = s.ops.length + ' op' + (s.ops.length === 1 ? '' : 's');
+    if(s.worst >= 0){
+      meta += ' · ★ heaviest: ' + s.ops[s.worst].name
+            + ' (' + rng(s.ops[s.worst].fres, 0) + ' N)';
+    }
+    html += '<details class="setup" open><summary>Setup: ' + s.name
+          + '<span class="sum-meta">' + meta + '</span></summary>'
+          + tableFor(s) + '</details>';
+  });
+  document.getElementById('table').innerHTML = html;
+  document.getElementById('legend').innerHTML =
+    '<b>★</b> heaviest operation per setup (size your fixture to this resultant). '
+    + '<b>≈</b> value estimated, not specified in the operation — '
+    + 'commonly a finish/cleanup pass where engagement comes from stock-to-leave '
+    + '(<b>≈</b> on <b>ae</b> = radial estimated, on <b>ap</b> = axial estimated). '
+    + 'Ranges span the material’s rake-angle band.';
+}
+
+function send(action, data){ if(window.adsk){ adsk.fusionSendData(action, data || ''); } }
+function recompute(){
+  send('recompute', JSON.stringify({ material: document.getElementById('mat').value }));
+}
+window.fusionJavaScriptHandler = { handle: function(action, data){
+  try { if(action === 'render'){ render(JSON.parse(data)); } }
+  catch(e){ return 'FAILED:' + e; }
+  return 'OK';
+}};
+document.getElementById('mat').addEventListener('change', recompute);
+document.getElementById('refresh').addEventListener('click', recompute);
+
+// window.adsk is injected slightly AFTER load, so polling for it before firing
+// 'ready' is required -- otherwise the request is dropped and the palette stays
+// empty (no materials, no operations).
+var initTries = 0;
+var initTimer = setInterval(function(){
+  initTries++;
+  if(window.adsk){ clearInterval(initTimer); send('ready', ''); }
+  else if(initTries > 100){ clearInterval(initTimer);
+    document.getElementById('table').innerHTML =
+      '<div class="empty">Fusion bridge (window.adsk) unavailable.</div>'; }
+}, 100);
+</script>
+</body>
+</html>

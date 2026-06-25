@@ -1,0 +1,21 @@
+{
+  "_comment": "Add a material: copy a block. kc11 = specific cutting force [N/mm^2] for a 1x1mm chip; mc = Kienzle exponent; rake_min/rake_max = typical positive rake range (deg) of cutters used on this material -> drives the output force band. Values are sharp-carbide literature starting points; calibrate kc11 to measured spindle load.",
+
+  "al7075":    { "name": "Aluminium 7075-T6",        "kc11": 850,  "mc": 0.23, "rake_min": 12, "rake_max": 20 },
+  "al6061":    { "name": "Aluminium 6061-T6",        "kc11": 700,  "mc": 0.23, "rake_min": 12, "rake_max": 20 },
+  "al_cast":   { "name": "Aluminium cast (AlSi)",    "kc11": 600,  "mc": 0.25, "rake_min": 10, "rake_max": 18 },
+
+  "steel_low":   { "name": "Steel, low carbon (<0.5%C)", "kc11": 1700, "mc": 0.25, "rake_min": 5,  "rake_max": 12 },
+  "steel_alloy": { "name": "Steel, alloy (42CrMo4)",     "kc11": 2000, "mc": 0.26, "rake_min": 0,  "rake_max": 10 },
+  "steel_tool":  { "name": "Tool steel (hardened)",      "kc11": 2600, "mc": 0.24, "rake_min": -5, "rake_max": 5  },
+
+  "ss304":   { "name": "Stainless 304 (austenitic)", "kc11": 2100, "mc": 0.21, "rake_min": 6, "rake_max": 14 },
+  "ss17_4":  { "name": "Stainless 17-4 PH",          "kc11": 2300, "mc": 0.21, "rake_min": 5, "rake_max": 12 },
+
+  "ti6al4v": { "name": "Titanium Ti-6Al-4V", "kc11": 1400, "mc": 0.23, "rake_min": 6, "rake_max": 12 },
+  "inconel": { "name": "Inconel 718",        "kc11": 2700, "mc": 0.24, "rake_min": 0, "rake_max": 8  },
+
+  "cast_iron": { "name": "Grey cast iron (GG25)",   "kc11": 1100, "mc": 0.26, "rake_min": 0,  "rake_max": 8  },
+  "brass":     { "name": "Brass (free-cutting)",    "kc11": 600,  "mc": 0.18, "rake_min": 0,  "rake_max": 10 },
+  "copper":    { "name": "Copper",                  "kc11": 900,  "mc": 0.22, "rake_min": 10, "rake_max": 20 }
+}
