@@ -56,9 +56,10 @@ ENGAGE_DEFAULT = (["stepover", "optimalLoad", "maximumStepover", "tool_stepover"
 
 CMD_ID = "cuttingForceEstimatorCmd"
 PALETTE_ID = "cuttingForcePalette"
-PANEL_ID = "cuttingForcePanel"
-TAB_ID = "MillingTab"          # native Manufacture > Milling tab (always visible);
-WORKSPACE_ID = "CAMEnvironment"  # a self-made tab is created hidden (isVisible=False)
+PANEL_ID = "CAMInspectPanel"          # native Milling > Inspect panel (App Store
+TAB_ID = "MillingTab"                 # rule: don't create your own panel)
+WORKSPACE_ID = "CAMEnvironment"
+LEGACY_PANEL_ID = "cuttingForcePanel"  # our old custom panel -- removed in stop()
 
 _handlers = []
 
@@ -282,10 +283,9 @@ def _build_ui(ui):
     _handlers.append(h)
 
     ws = ui.workspaces.itemById(WORKSPACE_ID)
-    tab = ws.toolbarTabs.itemById(TAB_ID)        # existing native Milling tab
-    panel = tab.toolbarPanels.itemById(PANEL_ID) or \
-        tab.toolbarPanels.add(PANEL_ID, "Cutting Force")
-    if not panel.controls.itemById(CMD_ID):
+    tab = ws.toolbarTabs.itemById(TAB_ID)              # native Milling tab
+    panel = tab.toolbarPanels.itemById(PANEL_ID)       # native Inspect panel
+    if panel and not panel.controls.itemById(CMD_ID):
         panel.controls.addCommand(cmd_def)
 
 
@@ -316,12 +316,20 @@ def stop(context):
         ws = ui.workspaces.itemById(WORKSPACE_ID)
         tab = ws.toolbarTabs.itemById(TAB_ID)
         if tab:
-            panel = tab.toolbarPanels.itemById(PANEL_ID)
+            panel = tab.toolbarPanels.itemById(PANEL_ID)   # native Inspect panel
             if panel:
                 ctrl = panel.controls.itemById(CMD_ID)
                 if ctrl:
-                    ctrl.deleteMe()
-                panel.deleteMe()      # remove only our panel; tab is native
+                    ctrl.deleteMe()                        # our control only; panel is native
+            legacy = tab.toolbarPanels.itemById(LEGACY_PANEL_ID)
+            if legacy:                                     # remove our old custom panel
+                lc = legacy.controls.itemById(CMD_ID)
+                if lc:
+                    lc.deleteMe()
+                try:
+                    legacy.deleteMe()
+                except Exception:
+                    pass
         cmd_def = ui.commandDefinitions.itemById(CMD_ID)
         if cmd_def:
             cmd_def.deleteMe()

@@ -25,7 +25,7 @@ NOTE: icon (resources/) currently NOT wired — a resourceFolder hung load; plai
   - `PARAM_IDS` + `ENGAGE` (per-strategy ae/ap ids) + `ENGAGE_DEFAULT`. `CM_TO_MM`: API returns lengths in cm. `_read` uses **itemByName** (CAMParameters has no itemById); `op.parameters` holds everything.
   - `_inputs_for(op,mat)->(CutInputs,ae_est,ap_est)`; stickout always = assemblyGauge−holderGauge (no user override). `_theme(app)`, `build_full_payload`, `_show_palette`, `HTMLHandler`.
   - `CreatedHandler`/`ExecuteHandler` (button→palette, no dialog), `run`/`stop`, `_build_ui`.
-  - UI: panel `cuttingForcePanel` added to the **native `MillingTab`** of `CAMEnvironment` (a self-made tab loads hidden); cmd `cuttingForceEstimatorCmd`, palette `cuttingForcePalette`. `stop` removes the panel, never the native tab.
+  - UI: command added to the **native `CAMInspectPanel`** (Milling > Inspect) — App Store rule forbids own panels. `stop` removes our control only + cleans up the legacy `cuttingForcePanel` (`LEGACY_PANEL_ID`). cmd `cuttingForceEstimatorCmd`, palette `cuttingForcePalette`.
 - **FusionCuttingForce.manifest** — add-in metadata; `runOnStartup: true`, valid-GUID `id`.
   Install: register the folder once via Add-Ins "+" (or junction into API/AddIns). Loaded direct from Projets.
 - **test_cutting_force.py** — extra checks (`python test_cutting_force.py`).
