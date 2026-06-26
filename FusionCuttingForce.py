@@ -61,6 +61,8 @@ TAB_ID = "MillingTab"                 # rule: don't create your own panel)
 WORKSPACE_ID = "CAMEnvironment"
 LEGACY_PANEL_ID = "cuttingForcePanel"  # our old custom panel -- removed in stop()
 
+_DEV_RELOAD = False  # True only while developing (reload pure modules on Stop->Run)
+
 _handlers = []
 
 
@@ -272,12 +274,12 @@ class CreatedHandler(adsk.core.CommandCreatedEventHandler):
 
 # --- Add-in lifecycle -------------------------------------------------------
 def _build_ui(ui):
-    # Icon temporarily off: our PNGs hang Fusion's icon loader on load (FusionScale's
-    # work, so it's a PNG-format difference under investigation). Plain button = the
-    # known-good state. Re-add the resourceFolder once the icons are fixed + verified.
+    # Icon verified working in isolation (the earlier "hang" was MCP flakiness, not
+    # the resourceFolder). Native path, like FusionScale -- not forward-slashed.
     cmd_def = ui.commandDefinitions.itemById(CMD_ID) or \
         ui.commandDefinitions.addButtonDefinition(
-            CMD_ID, "Cutting Force", "Estimate cutting forces of milling operations")
+            CMD_ID, "Cutting Force", "Estimate cutting forces of milling operations",
+            os.path.join(_ADDIN_DIR, "resources"))
     h = CreatedHandler()
     cmd_def.commandCreated.add(h)
     _handlers.append(h)
@@ -292,13 +294,15 @@ def _build_ui(ui):
 def run(context):
     ui = None
     try:
-        # Pick up edits to the pure modules on Stop->Run without a full Fusion
-        # restart. (Editing THIS file still needs a restart.)
-        for m in (materials, cf, report):
-            try:
-                importlib.reload(m)
-            except Exception:
-                pass
+        # Dev convenience: reload pure modules on Stop->Run so edits land without a
+        # full restart. OFF for release -- run() should only wire command events so
+        # startup stays well under the App Store's 0.005 s load budget.
+        if _DEV_RELOAD:
+            for m in (materials, cf, report):
+                try:
+                    importlib.reload(m)
+                except Exception:
+                    pass
         ui = adsk.core.Application.get().userInterface
         _build_ui(ui)
     except Exception:
