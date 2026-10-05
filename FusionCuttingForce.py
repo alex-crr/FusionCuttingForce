@@ -29,11 +29,22 @@ _ADDIN_DIR = os.path.dirname(os.path.abspath(__file__))
 if _ADDIN_DIR not in sys.path:
     sys.path.insert(0, _ADDIN_DIR)
 
-# Qualified imports (cf.X, not `from cf import X`) so importlib.reload in run()
-# actually refreshes these during development.
-import cutting_force as cf
-import materials
-import report
+
+
+class _Lazy:
+    """Module imported on first attribute access, not at add-in load: the App
+    Store requires run() < 5 ms and these imports (plus materials.json) cost more."""
+
+    def __init__(self, name):
+        self._name = name
+
+    def __getattr__(self, attr):
+        return getattr(importlib.import_module(self._name), attr)
+
+
+cf = _Lazy("cutting_force")
+materials = _Lazy("materials")
+report = _Lazy("report")
 
 PARAM_IDS = {
     "diameter": ["tool_diameter"],
@@ -298,9 +309,9 @@ def run(context):
         # full restart. OFF for release -- run() should only wire command events so
         # startup stays well under the App Store's 0.005 s load budget.
         if _DEV_RELOAD:
-            for m in (materials, cf, report):
+            for m in ("materials", "cutting_force", "report"):
                 try:
-                    importlib.reload(m)
+                    importlib.reload(importlib.import_module(m))
                 except Exception:
                     pass
         ui = adsk.core.Application.get().userInterface
