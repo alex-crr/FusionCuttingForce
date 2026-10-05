@@ -7,9 +7,10 @@ The repo root stays the dev add-in (loads from Fusion's API/AddIns). This script
 just copies the runtime files into the .bundle layout the App Store expects, so
 the dev layout isn't disturbed. See the fusion-addin-publishing skill for rules.
 
-Before submitting: set COMPANY and URL below, and bump VERSION (ProductCode is
-derived from VERSION; UpgradeCode stays constant forever).
+Bump "version" in FusionCuttingForce.manifest per submission (ProductCode is
+derived from it; UpgradeCode stays constant forever).
 """
+import json
 import os
 import shutil
 import uuid
@@ -17,13 +18,16 @@ import uuid
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DIST = os.path.join(ROOT, "dist")
 
+# Single source of truth: bump "version" in the manifest for every submission.
+with open(os.path.join(ROOT, "FusionCuttingForce.manifest"), encoding="utf-8") as _f:
+    VERSION = json.load(_f)["version"]
+
 APP_NAME = "Cutting Force"
 MODULE = "FusionCuttingForce"
-VERSION = "1.1.0"
 AUTHOR = "Alexandre Courrieu"
 EMAIL = "alexandre@courrieu.com"
-COMPANY = "Alexandre Courrieu"        # TODO: company / vendor display name
-URL = "https://example.com"           # TODO: your website / support URL
+COMPANY = "Alexandre Courrieu"
+URL = "https://github.com/alex-crr/FusionCuttingForce"
 DESCRIPTION = "Estimate milling cutting forces per CAM operation (Kienzle model)."
 
 UPGRADE_CODE = "{25842b42-b696-4da4-9cd3-139b871571a6}"          # STABLE forever
@@ -70,8 +74,6 @@ def build():
         shutil.copy2(src, dst)
     print("built:", out)
     print("version:", VERSION, "| ProductCode:", PRODUCT_CODE)
-    if "example.com" in URL or COMPANY == AUTHOR:
-        print("NOTE: set COMPANY and URL in build_bundle.py before submitting.")
 
 
 if __name__ == "__main__":
